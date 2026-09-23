@@ -14,7 +14,6 @@ if not os.path.exists(path):
     os.makedirs(path)
     
 def get_fits_macs(model, config):
-    # 채널 수 가져오기
     if hasattr(config, 'channels'):
         channels = config.channels
     elif hasattr(config, 'enc_in'):
@@ -22,12 +21,9 @@ def get_fits_macs(model, config):
     else:
         channels = 1 # 기본값 예외 처리
     
-    # --- 기존의 엄밀한 계산(FFT, IFFT, 복소수 4배) 모두 삭제 ---
-    # 논문식 꼼수 계산법 적용: (총 파라미터 수) * (채널 수)
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total_macs = total_params * channels
     
-    # ptflops와 비슷한 형태의 문자열(String)로 반환
     if total_macs >= 1e9: return f"{total_macs / 1e9:.2f} GMac"
     elif total_macs >= 1e6: return f"{total_macs / 1e6:.2f} MMac"
     elif total_macs >= 1e3: return f"{total_macs / 1e3:.2f} KMac"
@@ -81,16 +77,13 @@ def train(config, train_loader, vali_loader, test_loader):
     is_fits = (getattr(config, 'model', '') == 'FITS') or hasattr(model, 'freq_upsampler')
     is_MixLinear = (getattr(config, 'model', '') == 'MixLinear') or hasattr(model, 'mix_linear')
     
-    # 💡 FEDformer인지 확인하는 조건 추가 (config.model 이름이 'FEDformer'인 경우)
     is_fedformer = (getattr(config, 'model', '') == 'FEDformer')
     is_autoformer = (getattr(config, 'model', '') == 'Autoformer')
 
     if is_fits:
-        # --- 1. FITS 모델일 경우: 커스텀 수식 사용 ---
         macs = get_fits_macs(model, config)
         params = get_params_str(model)
     elif is_fedformer or is_autoformer:
-        # --- 2. FEDformer 또는 Autoformer 모델일 경우: 다중 입력(input_constructor) 사용 ---
         if hasattr(config, 'channels'):
             channel = config.channels
         elif hasattr(config, 'enc_in'):
@@ -116,7 +109,6 @@ def train(config, train_loader, vali_loader, test_loader):
 
             macs, params = get_model_complexity_info(
                 model,
-                (1,), # input_constructor를 쓰므로 해상도는 더미값 전달
                 input_constructor=prepare_fedformer_input,
                 as_strings=True,
                 print_per_layer_stat=False,
@@ -125,10 +117,9 @@ def train(config, train_loader, vali_loader, test_loader):
         except Exception as e:
             macs = "Error"
             params = "Error"
-            print(f"\n⚠️ FEDformer ptflops 에러 발생: {e}")
+            print(f"\n⚠️ FEDformer ptflops: {e}")
 
     else:
-        # --- 3. 그 외 모델일 경우: 기존 ptflops (단일 입력) 사용 ---
         if hasattr(config, 'channels'):
             channel = config.channels
         elif hasattr(config, 'enc_in'):
@@ -145,9 +136,8 @@ def train(config, train_loader, vali_loader, test_loader):
         except Exception as e:
             macs = "Error"
             params = "Error"
-            print(f"\n⚠️ 일반 모델 ptflops 에러 발생: {e}")
+            print(f"\n ptflops : {e}")
 
-    # 최종 출력
     print('Computational complexity: ' + str(macs))
     print('Number of parameters: ' + str(params))
     
@@ -233,12 +223,10 @@ def test(config, test_dataset, test_loader, model):
     # folder_path = f'./results/{time.time():.0f}/'
     # os.makedirs(folder_path, exist_ok=True)
 
-    # 누적 대신 합/개수 방식(예: MSE/MAE)
     n_samples = 0
     sum_abs = 0.0
     sum_sq  = 0.0
 
-    # 필요 시 상관계수 등 위해서만 소규모 샘플 보관
     sample_plot_done = False
 
     begin_time = time.time()
@@ -248,26 +236,22 @@ def test(config, test_dataset, test_loader, model):
             by = by.float().to(device, non_blocking=True)
 
             out = model(bx)
-            # 출력 길이 방어적 슬라이스
+
             if isinstance(out, tuple): out = out[0]
             pred_len = min(config.pred_len, out.shape[1], by.shape[1])
             out = out[:, -pred_len:, :]
             tgt = by[:, -pred_len:, :]
 
-            # 메트릭 즉시 업데이트(여기서는 MSE/MAE 예시)
             diff = (out - tgt).detach()
             sum_abs += diff.abs().sum().item()
             sum_sq  += (diff ** 2).sum().item()
             n_samples += diff.numel()
 
-            # 필요하면 샘플 1회만 플롯
             if (i % 20 == 0) and (not sample_plot_done):
                 x_cpu  = bx.detach().cpu()
                 y_cpu  = tgt.detach().cpu()
                 o_cpu  = out.detach().cpu()
-                # 채널 존재/인덱스 방어
                 ch = min(x_cpu.shape[-1]-1, 0)
-                # 입력 구간 + 예측 구간 이어 붙이기 (1D)
                 gt = np.concatenate((x_cpu[0, :, ch].numpy(), y_cpu[0, :, ch].numpy()), axis=0)
                 pd = np.concatenate((x_cpu[0, :, ch].numpy(), o_cpu[0, :, ch].numpy()), axis=0)
                 plt.figure(figsize=(12, 5))
@@ -278,10 +262,9 @@ def test(config, test_dataset, test_loader, model):
                 plt.close()
                 sample_plot_done = True
 
-            # 루프 말미 GC(가볍게)
             del bx, by, bxm, bym, out, tgt, diff
             if torch.cuda.is_available():
-                torch.cuda.empty_cache()  # ← 루프 내 상시호출은 지양. 필요하면 "간헐적"으로만
+                torch.cuda.empty_cache() 
         # end for
 
     elapsed = time.time() - begin_time
@@ -289,13 +272,11 @@ def test(config, test_dataset, test_loader, model):
     mse = sum_sq  / n_samples
     rmse = np.sqrt(mse)
 
-    # 결과 출력
     print("==================================================")
     print(f"mse:{mse:.6f}, mae:{mae:.6f}, rmse:{rmse:.6f}, "
           f"ms/sample:{(elapsed*1000)/len(test_dataset):.3f}")
     print(f"inference time: {elapsed:.3f}s")
 
-    # 마지막에만 캐시 정리
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
