@@ -175,7 +175,7 @@ The period length determines the alignment granularity of the representation and
 To examine sensitivity to this prior, we vary the period length on ETTh1 and Weather while keeping the remaining architectural configuration fixed.
 
 <p align="center">
-  <img src="./Figures/Figure2.png" alt="Sensitivity to period selection" width="90%">
+  <img src="./Figures/Figure2.PNG" alt="Sensitivity to period selection" width="90%">
 </p>
 
 The effect of period selection is dataset-dependent.
