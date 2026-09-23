@@ -19,7 +19,7 @@ def get_fits_macs(model, config):
     elif hasattr(config, 'enc_in'):
         channels = config.enc_in 
     else:
-        channels = 1 # 기본값 예외 처리
+        channels = 1
     
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total_macs = total_params * channels
