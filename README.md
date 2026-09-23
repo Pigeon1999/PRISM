@@ -145,7 +145,7 @@ The evaluated variants are:
 ### Forecasting Performance
 
 <p align="center">
-  <img src="./Figures/Table3_4.PNG" alt="Ablation study on forecasting performance" width="85%">
+  <img src="./Figures/Table3.PNG" alt="Ablation study on forecasting performance" width="85%">
 </p>
 
 Removing period reorganization substantially degrades forecasting performance on ETTh1, while removing temporal mixing generally results in comparable or worse accuracy.
@@ -156,7 +156,7 @@ Sequence summarization plays an especially important role because it reduces the
 ### Computational Efficiency
 
 <p align="center">
-  <img src="./Figures/.PNG" alt="Ablation study on computational efficiency" width="85%">
+  <img src="./Figures/Table4.PNG" alt="Ablation study on computational efficiency" width="85%">
 </p>
 
 Removing sequence summarization substantially increases computational cost because the forecasting head must operate on the original cross-period representation rather than the compressed one.
