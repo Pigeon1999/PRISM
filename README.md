@@ -1,152 +1,188 @@
 <div align="center">
   <h2>
-    <b>PRISM: Lightweight Long-Term Time Series Forecasting With Period-Based Reorganization and Dual-Axis Convolution</b>
+    <b>PRISM: Lightweight Long-Term Time Series Forecasting with Period-Aligned Summarization</b>
   </h2>
 </div>
 
 <div align="center">
 
-![Status](https://img.shields.io/badge/Manuscript-Submitted-orange)
-![Python](https://img.shields.io/badge/Python-3.8-3776AB?logo=python\&logoColor=white)
-![PyTorch](https://img.shields.io/badge/PyTorch-2.4.1-EE4C2C?logo=pytorch\&logoColor=white)
-![Last Commit](https://img.shields.io/github/last-commit/Pigeon1999/PRISM)
-![Stars](https://img.shields.io/github/stars/Pigeon1999/PRISM?style=flat)
+![Python](https://img.shields.io/badge/Python-3.8-3776AB?logo=python&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.4.1-EE4C2C?logo=pytorch&logoColor=white)
 
 </div>
 
 This repository provides the PyTorch implementation accompanying our submitted manuscript:
 
-> **PRISM: Lightweight Long-Term Time Series Forecasting With Period-Based Reorganization and Dual-Axis Convolution**
+> **PRISM: Lightweight Long-Term Time Series Forecasting with Period-Aligned Summarization**
 
-PRISM stands for **Period Reorganization With Intra-Period Sequence Mixing**.
-
-> **Manuscript status:** Submitted and not yet published.
+> **Manuscript status:** Submitted and not yet published.  
 > The repository and experimental results may be updated during the review process.
 
 
 ## 🔍 Overview
 
-PRISM is a lightweight framework for long-term time series forecasting designed for resource-constrained environments.
+PRISM is a lightweight framework for long-term time series forecasting designed to balance forecasting accuracy and computational efficiency.
 
-Existing minimalist forecasting models primarily rely on linear projections. Although computationally efficient, linear projections do not exploit local temporal patterns through shared weights and require parameters proportional to their input and output dimensions.
+PRISM exploits periodic structure as a **computational prior** by reorganizing the input sequence into a period-aligned representation with cross-period and intra-period temporal axes.
 
-PRISM addresses this limitation through a **dual-axis convolutional architecture**:
+Rather than applying the same computation to both axes, PRISM assigns them asymmetric computational roles:
 
-* **Period-based reorganization** transforms a one-dimensional sequence into a two-dimensional periodic representation.
-* **Sequence summarization** applies dilated Conv1d across periods to efficiently capture long-range cross-period patterns.
-* **Temporal mixing** applies circular-padded Conv1d within each period to learn correlations among temporal phases.
-* **Lightweight forecasting** uses a single linear layer to map the extracted representation to the forecasting horizon.
-* **ACF-guided configuration** connects the temporal characteristics of each dataset to interpretable hyperparameter choices.
+* **Period reorganization** transforms the one-dimensional sequence into a two-dimensional period-aligned representation.
+* **Sequence summarization** compresses the cross-period dimension before forecasting.
+* **Temporal mixing** refines dependencies along the intra-period dimension using a lightweight shared convolution.
+* **Lightweight forecasting** maps the compact representation to future periods using a shared linear layer.
+
+The central design principle of PRISM lies not in the use of convolution itself, but in the asymmetric organization of computation across the two temporal axes.
 
 <p align="center">
-  <img src="./Figures/Figure1.jpg" alt="Efficiency and accuracy comparison of PRISM" width="78%">
+  <img src="./Figures/Figure1.png" alt="Overall architecture of PRISM" width="100%">
 </p>
 
-PRISM establishes a favorable efficiency–accuracy operating point by maintaining competitive forecasting performance with an extremely small parameter count and computational cost.
+PRISM performs forecasting from a compact period-aligned representation, allowing the forecasting head to avoid operating directly on the full historical sequence.
 
 
 ## 🏗️ Model Architecture
 
-<p align="center">
-  <img src="./Figures/Figure2.png" alt="Overall architecture of PRISM" width="100%">
-</p>
-
 The PRISM forecasting pipeline consists of five primary stages:
 
 1. **Instance normalization** removes the temporal mean from each input sequence.
-2. **2D reorganization** reshapes the sequence according to its known period.
-3. **Sequence summarization** applies dilated Conv1d along the cross-period axis.
+2. **Period reorganization** reshapes the sequence into a period-aligned two-dimensional representation.
+3. **Sequence summarization** applies dilated Conv1d along the cross-period axis to compress historical information.
 4. **Temporal mixing** applies circular-padded Conv1d along the intra-period axis.
-5. **Linear forecasting and reconstruction** generate and restore the final one-dimensional forecast.
+5. **Linear forecasting and reconstruction** map the compact representation to future periods and reconstruct the final one-dimensional forecast.
 
 The complete model is implemented in [`models/PRISM.py`](./models/PRISM.py).
 
 ### Sequence Summarization
 
-Observations with the same phase across consecutive periods are processed using dilated Conv1d. Kernel size, stride, and dilation jointly determine the receptive field and compression ratio.
+After period reorganization, the input is organized so that observations occupying the same position in different periods are aligned along the cross-period axis.
 
-This operation captures long-range cross-period dependencies while requiring only a small convolution kernel rather than a dense linear projection.
+Sequence summarization applies a shared dilated one-dimensional convolution along this axis. Kernel size, stride, and dilation control how much historical information is covered and how strongly the representation is compressed.
+
+This stage performs the primary dimensional reduction in PRISM. By reducing the cross-period dimension before forecasting, the forecasting head operates on a compact representation rather than the full historical sequence.
 
 ### Temporal Mixing
 
-Circular-padded Conv1d is applied across the temporal phases within each period.
+Temporal mixing operates along the intra-period axis after cross-period summarization.
 
-Circular padding preserves continuity between the final phase of one period and the initial phase of the next period, allowing PRISM to model the cyclic structure of periodic time series without introducing artificial boundary discontinuities.
+PRISM applies a shared one-dimensional convolution with circular padding so that temporal positions near the beginning and end of each period can interact naturally.
+
+Because the same kernel is reused across summarized cross-period features, temporal mixing introduces only a small number of additional parameters while modeling complementary intra-period structure.
 
 
 ## 📊 Experimental Results
 
 ### Forecasting Performance
-PRISM achieves top-three forecasting performance in **24 of 32 evaluation settings**. It ranks first across all forecasting horizons on ETTh1 and maintains top-three performance across all horizons on ETTh2 and ETTm2.
 
-The model also remains competitive on high-dimensional datasets such as Electricity and Traffic while using substantially fewer computational resources than Transformer-based forecasting models.
+PRISM is evaluated on seven widely used long-term time series forecasting benchmarks:
+
+* ETTh1
+* ETTh2
+* ETTm1
+* ETTm2
+* Weather
+* Electricity
+* Traffic
+
+All forecasting experiments use an input length of 720 and evaluate four forecasting horizons:
+
+* 96
+* 192
+* 336
+* 720
+
+PRISM is compared with MixLinear, TimeBase, SparseTSF, FITS, PatchTST, and TimesNet using MSE and MAE.
+
+Across the evaluated settings, PRISM maintains competitive forecasting performance while using a highly compact architecture. In particular, PRISM performs strongly on ETTh1 and remains competitive with recent lightweight forecasting models across multiple datasets and forecasting horizons.
 
 <p align="center">
-  <img src="./Figures/Table2.jpg" alt="MSE comparison of multivariate long-term time series forecasting results" width="100%">
+  <img src="./Figures/Table1.png" alt="Forecasting performance on seven benchmark datasets" width="100%">
 </p>
-
 
 
 ### Parameter and Computational Efficiency
-PRISM achieves top-two performance in parameter count and MACs across most evaluated settings.
 
-Under the representative configuration with an input length of 720 and a forecasting horizon of 96, PRISM requires only **45 parameters** and **13.78K MACs**.
+PRISM is designed to reduce computation before the forecasting stage rather than relying on a large forecasting head.
 
-For ETTh1 with a forecasting horizon of 720, PRISM reduces MACs by approximately:
+Its parameter count is determined by three compact components:
 
-These results demonstrate that PRISM provides balanced efficiency in both model size and computational cost rather than optimizing only one of these dimensions.
+* the sequence summarization kernel,
+* the temporal mixing kernel,
+* and the shared forecasting layer.
 
-<p align="center">
-  <img src="./Figures/Table3.jpg" alt="Comparison of parameter counts and MACs" width="100%">
-</p>
+The computational cost grows with the compressed cross-period representation rather than the original historical representation. As a result, sequence summarization directly reduces the cost of the forecasting head.
 
+A detailed practical efficiency comparison is conducted on Electricity with an input length and forecasting horizon of 720.
 
+Under this setting, PRISM requires only:
 
-## 🔬 ACF-Guided Hyperparameter Analysis
-PRISM uses the autocorrelation function to interpret the temporal structure of a dataset and guide the selection of its primary hyperparameters:
+* **279 trainable parameters**
+* **2.70M MACs**
+* **487.48 peak memory**
+* **0.44 ms GPU inference latency**
+* **1.36 ms CPU inference latency**
 
-* `kernel_size` determines how many periods are summarized by each convolution.
-* `stride` controls the compression ratio of cross-period features.
-* `dilation` determines the receptive field across periods.
-* `temporal_kernel_size` controls the range of intra-period temporal interactions.
-
-Datasets with sustained periodicity can benefit from a larger dilation, whereas datasets with rapidly decaying autocorrelation generally favor a more moderate receptive field.
-
-<p align="center">
-  <img src="./Figures/Figure3.jpg" alt="Autocorrelation function of the Electricity dataset" width="75%">
-</p>
-
-### Dilation Analysis
-Increasing dilation expands the cross-period receptive field while reducing MACs. However, an excessively large dilation can skip important local relationships and degrade forecasting accuracy.
-
-On the Electricity dataset, the forecasting error remains stable up to a moderate dilation value before increasing sharply, demonstrating the importance of balancing computational efficiency and temporal coverage.
+Compared with TimeBase, PRISM reduces MACs by approximately **11.5%** and peak memory usage by approximately **50.4%**.
 
 <p align="center">
-  <img src="./Figures/Figure4.jpg" alt="Impact of dilation on forecasting performance and MACs" width="75%">
+  <img src="./Figures/Table2.png" alt="Efficiency comparison on Electricity" width="100%">
 </p>
 
+These results indicate that PRISM provides a favorable balance across parameter count, computational cost, memory usage, and practical inference efficiency rather than optimizing only a single efficiency metric.
 
 
-## 🔄 Effect of Temporal Mixing
-Temporal mixing consistently improves forecasting performance on ETTh1 and provides smaller but meaningful improvements on Traffic.
+## 🔬 Ablation Study
 
-Its effect is limited on Electricity, whose rapidly decaying intra-period autocorrelation provides less temporal structure for the mixing operation to exploit. Across the evaluated datasets, temporal mixing contributes either positively or neutrally and does not degrade performance.
+We evaluate the contribution of the three primary components of PRISM on ETTh1, Electricity, and Traffic at a forecasting horizon of 720.
+
+The evaluated variants are:
+
+* **PRISM**
+* **w/o Period Reorganization**
+* **w/o Sequence Summarization**
+* **w/o Temporal Mixing**
+
+### Forecasting Performance
 
 <p align="center">
-  <img src="./Figures/Figure5.jpg" alt="Forecasting performance with and without temporal mixing" width="100%">
+  <img src="./Figures/Table3.png" alt="Ablation study on forecasting performance" width="85%">
 </p>
 
+Removing period reorganization substantially degrades forecasting performance on ETTh1, while removing temporal mixing generally results in comparable or worse accuracy.
 
-### Temporal Mixing Kernel Size
-The optimal temporal mixing kernel size depends on the strength and range of intra-period correlations.
+Sequence summarization plays an especially important role because it reduces the representation size before forecasting while maintaining competitive predictive performance.
 
-Larger kernels can capture broader phase interactions in strongly periodic data, but they may introduce noise or destructive interactions when intra-period dependencies are weak. This result further supports configuring PRISM according to the temporal characteristics observed through ACF analysis.
+
+### Computational Efficiency
 
 <p align="center">
-  <img src="./Figures/Figure6.jpg" alt="Impact of temporal mixing kernel size" width="100%">
+  <img src="./Figures/Table4.png" alt="Ablation study on computational efficiency" width="85%">
 </p>
 
+Removing sequence summarization substantially increases computational cost because the forecasting head must operate on the original cross-period representation rather than the compressed one.
 
+For example, on Traffic, sequence summarization reduces computation from **21.72M MACs to 7.26M MACs**, corresponding to approximately a **66.6% reduction**.
+
+Temporal mixing contributes relatively little additional computation while generally improving or preserving forecasting accuracy.
+
+
+## 🔄 Sensitivity to Period Selection
+
+PRISM relies on a predefined period length to construct the period-aligned representation.
+
+The period length determines the alignment granularity of the representation and serves as a structural prior. It is not required to exactly match a dominant physical or seasonal period.
+
+To examine sensitivity to this prior, we vary the period length on ETTh1 and Weather while keeping the remaining architectural configuration fixed.
+
+<p align="center">
+  <img src="./Figures/Figure2.png" alt="Sensitivity to period selection" width="90%">
+</p>
+
+The effect of period selection is dataset-dependent.
+
+ETTh1 is more sensitive to particular period choices, although several alternative values remain comparable to the default setting. Weather exhibits a smoother response and remains relatively stable across a broader range of period values.
+
+These results indicate that an appropriate alignment granularity can be important, while the degree of sensitivity varies across datasets.
 
 
 ## 🚀 Getting Started
@@ -154,7 +190,7 @@ Larger kernels can capture broader phase interactions in strongly periodic data,
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/Pigeon1999/PRISM.git
+git clone <anonymous-repository-url>
 cd PRISM
 ```
 
@@ -190,11 +226,25 @@ PRISM/
     └── <dataset>.csv
 ```
 
+The experiments use the following seven datasets:
+
+```text
+ETTh1
+ETTh2
+ETTm1
+ETTm2
+Weather
+Electricity
+Traffic
+```
+
 The dataset path, forecasting horizon, and PRISM hyperparameters can be configured in [`main.ipynb`](./main.ipynb).
 
 
 ## 📝 Manuscript Status
 
 This work has been submitted and is not yet published.
+
+The repository is provided for anonymous review and reproducibility.
 
 A public manuscript link, publication information, and BibTeX citation will be added after publication.
