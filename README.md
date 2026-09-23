@@ -35,7 +35,7 @@ Rather than applying the same computation to both axes, PRISM assigns them asymm
 The central design principle of PRISM lies not in the use of convolution itself, but in the asymmetric organization of computation across the two temporal axes.
 
 <p align="center">
-  <img src="./Figures/Figure1.png" alt="Overall architecture of PRISM" width="100%">
+  <img src="./Figures/Figure1.PNG" alt="Overall architecture of PRISM" width="100%">
 </p>
 
 PRISM performs forecasting from a compact period-aligned representation, allowing the forecasting head to avoid operating directly on the full historical sequence.
@@ -96,7 +96,7 @@ PRISM is compared with MixLinear, TimeBase, SparseTSF, FITS, PatchTST, and Times
 Across the evaluated settings, PRISM maintains competitive forecasting performance while using a highly compact architecture. In particular, PRISM performs strongly on ETTh1 and remains competitive with recent lightweight forecasting models across multiple datasets and forecasting horizons.
 
 <p align="center">
-  <img src="./Figures/Table1.png" alt="Forecasting performance on seven benchmark datasets" width="100%">
+  <img src="./Figures/Table1.PNG" alt="Forecasting performance on seven benchmark datasets" width="100%">
 </p>
 
 
@@ -125,7 +125,7 @@ Under this setting, PRISM requires only:
 Compared with TimeBase, PRISM reduces MACs by approximately **11.5%** and peak memory usage by approximately **50.4%**.
 
 <p align="center">
-  <img src="./Figures/Table2.png" alt="Efficiency comparison on Electricity" width="100%">
+  <img src="./Figures/Table2.PNG" alt="Efficiency comparison on Electricity" width="100%">
 </p>
 
 These results indicate that PRISM provides a favorable balance across parameter count, computational cost, memory usage, and practical inference efficiency rather than optimizing only a single efficiency metric.
@@ -145,7 +145,7 @@ The evaluated variants are:
 ### Forecasting Performance
 
 <p align="center">
-  <img src="./Figures/Table3.png" alt="Ablation study on forecasting performance" width="85%">
+  <img src="./Figures/Table3_4.PNG" alt="Ablation study on forecasting performance" width="85%">
 </p>
 
 Removing period reorganization substantially degrades forecasting performance on ETTh1, while removing temporal mixing generally results in comparable or worse accuracy.
@@ -156,7 +156,7 @@ Sequence summarization plays an especially important role because it reduces the
 ### Computational Efficiency
 
 <p align="center">
-  <img src="./Figures/Table4.png" alt="Ablation study on computational efficiency" width="85%">
+  <img src="./Figures/.PNG" alt="Ablation study on computational efficiency" width="85%">
 </p>
 
 Removing sequence summarization substantially increases computational cost because the forecasting head must operate on the original cross-period representation rather than the compressed one.
